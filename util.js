@@ -1,5 +1,6 @@
-import jwt from 'jsonwebtoken';
-import config from './config';
+const jwt = require('jsonwebtoken');
+require('dotenv').config();
+
 const getToken = (user) => {
   return jwt.sign(
     {
@@ -8,7 +9,7 @@ const getToken = (user) => {
       email: user.email,
       isAdmin: user.isAdmin,
     },
-    config.JWT_SECRET,
+    process.env.JWT_SECRET || 'somethingsecret',
     {
       expiresIn: '48h',
     }
@@ -20,7 +21,7 @@ const isAuth = (req, res, next) => {
 
   if (token) {
     const onlyToken = token.slice(7, token.length);
-    jwt.verify(onlyToken, config.JWT_SECRET, (err, decode) => {
+    jwt.verify(onlyToken, process.env.JWT_SECRET || 'somethingsecret', (err, decode) => {
       if (err) {
         return res.status(401).send({ message: 'Invalid Token' });
       }
@@ -41,4 +42,4 @@ const isAdmin = (req, res, next) => {
   return res.status(401).send({ message: 'Admin Token is not valid.' });
 };
 
-export { getToken, isAuth, isAdmin };
+module.exports = { getToken, isAuth, isAdmin };
