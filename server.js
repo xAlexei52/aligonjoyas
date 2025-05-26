@@ -18,8 +18,8 @@ const connectDB = async () => {
       useUnifiedTopology: true,
     });
     
-    console.log(`✅ MongoDB conectado: ${conn.connection.host}`);
-    console.log(`📊 Base de datos: ${conn.connection.name}`);
+    console.log(`MongoDB conectado: ${conn.connection.host}`);
+    console.log(`Base de datos: ${conn.connection.name}`);
   } catch (error) {
     console.error('❌ Error conectando a MongoDB:', error.message);
     process.exit(1);
@@ -57,7 +57,7 @@ if (process.env.NODE_ENV === 'production') {
 // Ruta de prueba
 app.get('/', (req, res) => {
   res.json({ 
-    message: '🚀 Servidor funcionando correctamente',
+    message: 'Servidor funcionando correctamente',
     database: mongoose.connection.readyState === 1 ? 'Conectado' : 'Desconectado',
     timestamp: new Date().toISOString(),
     routes: {
@@ -88,20 +88,20 @@ const startServer = async () => {
     
     // Luego iniciar el servidor
     app.listen(PORT, () => {
-      console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
-      console.log(`🔍 Health check: http://localhost:${PORT}/api/health`);
+      console.log(`Servidor corriendo en http://localhost:${PORT}`);
+      console.log(`Health check: http://localhost:${PORT}/api/health`);
     });
   } catch (error) {
-    console.error('❌ Error iniciando el servidor:', error);
+    console.error('Error iniciando el servidor:', error);
     process.exit(1);
   }
 };
 
 // Manejar cierre graceful
 process.on('SIGINT', async () => {
-  console.log('\n🛑 Cerrando servidor...');
+  console.log('\nCerrando servidor...');
   await mongoose.connection.close();
-  console.log('✅ Conexión a MongoDB cerrada');
+  console.log('Conexión a MongoDB cerrada');
   process.exit(0);
 });
 

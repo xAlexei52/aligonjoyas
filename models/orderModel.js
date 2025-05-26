@@ -24,12 +24,39 @@ const orderItemSchema = new mongoose.Schema({
   name: { type: String, required: true },
   qty: { type: Number, required: true },
   image: { type: String, required: true },
-  price: { type: Number, required: true }, // Cambiado de String a Number
+  price: { type: Number, required: true },
   product: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Product',
     required: true
   },
+});
+
+// Nuevo schema para cupón aplicado
+const appliedCouponSchema = new mongoose.Schema({
+  couponId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Coupon',
+    required: true
+  },
+  code: {
+    type: String,
+    required: true
+  },
+  discountType: {
+    type: String,
+    enum: ['percentage', 'fixed'],
+    required: true
+  },
+  discountValue: {
+    type: Number,
+    required: true
+  },
+  discountAmount: {
+    type: Number,
+    required: true,
+    min: 0
+  }
 });
 
 const orderSchema = new mongoose.Schema({
@@ -52,6 +79,21 @@ const orderSchema = new mongoose.Schema({
     default: 0.0
   },
   shippingPrice: { 
+    type: Number,
+    required: true,
+    default: 0.0
+  },
+  // Nuevos campos para cupones
+  appliedCoupon: {
+    type: appliedCouponSchema,
+    default: null
+  },
+  discountAmount: {
+    type: Number,
+    default: 0.0,
+    min: 0
+  },
+  subtotal: {
     type: Number,
     required: true,
     default: 0.0
@@ -79,6 +121,16 @@ const orderSchema = new mongoose.Schema({
     type: String,
     enum: ['Pending', 'Processing', 'Shipped', 'Delivered', 'Cancelled'],
     default: 'Pending'
+  },
+  // Campo para rastrear si se generó cupón
+  couponGenerated: {
+    type: Boolean,
+    default: false
+  },
+  generatedCouponId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Coupon',
+    default: null
   }
 }, {
   timestamps: true
@@ -88,12 +140,44 @@ const orderSchema = new mongoose.Schema({
 orderSchema.index({ user: 1 });
 orderSchema.index({ createdAt: -1 });
 orderSchema.index({ orderStatus: 1 });
+orderSchema.index({ 'appliedCoupon.code': 1 });
 
-// Método para calcular el total de la orden
-orderSchema.methods.calculateTotal = function() {
+// Método para calcular el total de la orden (con o sin cupón)
+orderSchema.methods.calculateTotal = function(couponDiscount = 0) {
+  // Calcular subtotal de items
   this.itemsPrice = this.orderItems.reduce((acc, item) => acc + item.qty * item.price, 0);
-  this.taxPrice = Number((0.15 * this.itemsPrice).toFixed(2)); // 15% tax
-  this.totalPrice = Number((this.itemsPrice + this.taxPrice + this.shippingPrice).toFixed(2));
+  
+  // Calcular subtotal (items + shipping)
+  this.subtotal = this.itemsPrice + this.shippingPrice;
+  
+  // Aplicar descuento si existe
+  this.discountAmount = couponDiscount;
+  
+  // Calcular impuestos sobre el subtotal después del descuento
+  const taxableAmount = Math.max(0, this.subtotal - this.discountAmount);
+  this.taxPrice = Number((0.15 * taxableAmount).toFixed(2)); // 15% tax
+  
+  // Calcular total final
+  this.totalPrice = Number((this.subtotal - this.discountAmount + this.taxPrice).toFixed(2));
+  
+  // Asegurar que el total no sea negativo
+  if (this.totalPrice < 0) {
+    this.totalPrice = 0;
+  }
+};
+
+// Método para aplicar cupón
+orderSchema.methods.applyCoupon = function(coupon, discountAmount) {
+  this.appliedCoupon = {
+    couponId: coupon._id,
+    code: coupon.code,
+    discountType: coupon.discountType,
+    discountValue: coupon.discountValue,
+    discountAmount: discountAmount
+  };
+  
+  // Recalcular totales con el descuento
+  this.calculateTotal(discountAmount);
 };
 
 // Método para marcar como pagado
@@ -110,6 +194,25 @@ orderSchema.methods.markAsDelivered = function() {
   this.deliveredAt = Date.now();
   this.orderStatus = 'Delivered';
   return this.save();
+};
+
+// Método para determinar si califica para cupón
+orderSchema.methods.qualifiesForCoupon = function() {
+  // Solo órdenes pagadas califican
+  if (!this.isPaid) return false;
+  
+  // No generar cupón si ya se generó uno
+  if (this.couponGenerated) return false;
+  
+  // Verificar monto mínimo (sin incluir impuestos y descuentos previos)
+  const baseAmount = this.itemsPrice + this.shippingPrice;
+  
+  return baseAmount >= 200; // Mínimo $200 para cualquier cupón
+};
+
+// Método para obtener el monto base para cupones
+orderSchema.methods.getCouponBaseAmount = function() {
+  return this.itemsPrice + this.shippingPrice;
 };
 
 const Order = mongoose.model('Order', orderSchema);
